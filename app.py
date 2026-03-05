@@ -6,33 +6,24 @@ from docx import Document
 st.set_page_config(page_title="Конструктор КСП", layout="wide")
 st.title("🎓 Конструктор КСП")
 
-# 1. Настройка
+# 1. Настройка ключа
 if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("Ключ не найден в Secrets!")
+    st.error("❌ Ключ GOOGLE_API_KEY не найден. Перейди в Settings -> Secrets.")
     st.stop()
 
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-
-# 2. АВТОМАТИЧЕСКИЙ ПОИСК МОДЕЛИ (решает проблему 404)
-@st.cache_resource
-def get_model():
-    # Получаем список всех моделей, которые поддерживают генерацию контента
-    models = [m for m in genai.list_models() if 'generateContent' in m.supported_methods]
-    if not models:
-        return None
-    # Берем первую доступную модель (например, gemini-pro или flash, какая есть)
-    return genai.GenerativeModel(models[0].name)
-
-model = get_model()
-
-if model is None:
-    st.error("Google не вернул ни одной доступной модели. Проверьте ваш API-ключ.")
+# 2. Настройка модели (жестко задаем имя)
+try:
+    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    # Используем проверенное имя модели
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except Exception as e:
+    st.error(f"Ошибка при инициализации модели: {e}")
     st.stop()
 
-# 3. Интерфейс (Боковая панель)
+# 3. Боковая панель
 with st.sidebar:
-    st.header("Данные")
-    fio = st.text_input("ФИО")
+    st.header("Данные педагога")
+    fio = st.text_input("ФИО педагога")
     school = st.text_input("Школа")
     subject = st.selectbox("Предмет", ["Математика", "Физика", "История", "Информатика", "Другое"])
     grade = st.selectbox("Класс", [f"{i} класс" for i in range(1, 12)])
@@ -44,14 +35,14 @@ if st.button("Сгенерировать план"):
     if not topic:
         st.warning("Введите тему!")
     else:
-        with st.spinner(f'Работаю через модель: {model.model_name}...'):
+        with st.spinner('Генерирую...'):
             try:
-                prompt = f"Составь КСП для {fio}, школа {school}, {grade}, {subject}. Тема: {topic}. Структура: Цели, Этапы (таблица), Оценивание, Рефлексия."
+                prompt = f"Составь подробный КСП для {fio}, школа {school}, {grade}, {subject}. Тема: {topic}. Структура: Цели, Этапы урока (таблица), Оценивание, Рефлексия."
                 response = model.generate_content(prompt)
                 st.session_state['plan'] = response.text
                 st.markdown(response.text)
             except Exception as e:
-                st.error(f"Ошибка: {e}")
+                st.error(f"Ошибка при генерации: {e}")
 
 # 5. Экспорт
 if 'plan' in st.session_state:
