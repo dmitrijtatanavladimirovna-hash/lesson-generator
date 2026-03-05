@@ -3,30 +3,24 @@ import google.generativeai as genai
 import io
 from docx import Document
 
-st.set_page_config(page_title="Конструктор КСП", layout="wide")
-
-# Проверка ключа
-if "GOOGLE_API_KEY" not in st.secrets:
-    st.error("Ключ не найден в Secrets!")
-    st.stop()
-
-# Инициализация
+# Настройка
 genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Интерфейс
-fio = st.text_input("ФИО учителя")
+# Используем 1.0-pro, она самая стабильная и доступная для всех
+model = genai.GenerativeModel('gemini-1.0-pro')
+
+st.title("🎓 Конструктор КСП")
+fio = st.text_input("ФИО")
 topic = st.text_input("Тема урока")
 
 if st.button("Сгенерировать"):
-    with st.spinner('Генерирую...'):
-        try:
-            prompt = f"Составь подробный КСП на тему: {topic}. Учитель: {fio}."
-            response = model.generate_content(prompt)
-            st.session_state['plan'] = response.text
-            st.markdown(response.text)
-        except Exception as e:
-            st.error(f"Ошибка: {e}")
+    try:
+        # Простой запрос без лишней логики
+        response = model.generate_content(f"Составь план урока на тему: {topic}. Учитель: {fio}")
+        st.session_state['plan'] = response.text
+        st.markdown(response.text)
+    except Exception as e:
+        st.error(f"Ошибка API: {e}")
 
 # Экспорт
 if 'plan' in st.session_state:
@@ -34,4 +28,4 @@ if 'plan' in st.session_state:
     doc.add_paragraph(st.session_state['plan'])
     bio = io.BytesIO()
     doc.save(bio)
-    st.download_button("Скачать в Word", data=bio.getvalue(), file_name="КСП.docx")
+    st.download_button("Скачать в Word", data=bio.getvalue(), file_name="plan.docx")
