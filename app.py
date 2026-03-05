@@ -1,76 +1,55 @@
 import streamlit as st
 import google.generativeai as genai
-import io
-from docx import Document
 
-# Настройка API (используем секреты, чтобы не "светить" ключ в коде)
+# Настройка страницы
+st.set_page_config(page_title="Генератор уроков", page_icon="📝")
+st.title("📝 Генератор планов уроков")
+
+# Получаем ключ из Secrets
 try:
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+    api_key = st.secrets["GOOGLE_API_KEY"]
+    genai.configure(api_key=api_key)
 except Exception as e:
-    st.error("Ошибка API ключа: убедись, что ключ добавлен в настройки приложения (Secrets).")
+    st.error("Ошибка доступа к API-ключу. Проверь настройки Secrets в Streamlit.")
     st.stop()
 
-st.set_page_config(page_title="Генератор КСП", layout="wide")
-st.title("🎓 Конструктор планов уроков (ГОСО РК)")
+# Инициализация модели
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-# Функция генерации Word
-def create_word_doc(content):
-    doc = Document()
-    doc.add_heading('Краткосрочный план урока', 0)
-    for line in content.split('\n'):
-        line = line.strip()
-        if line:
-            if line.startswith("#"):
-                doc.add_heading(line.replace("#", "").strip(), level=1)
-            else:
-                doc.add_paragraph(line)
-    bio = io.BytesIO()
-    doc.save(bio)
-    return bio.getvalue()
-
-# Боковая панель
+# Форма ввода данных
 with st.sidebar:
-    st.header("Ввод данных")
-    subject = st.text_input("Предмет", value="Физика")
-    grade = st.selectbox("Класс", ["7 класс", "8 класс", "9 класс", "10 класс (ЕМН)", "11 класс"])
-    topic = st.text_input("Тема урока")
-    objectives = st.text_area("Цели обучения (скопируй из КТП)")
-    values = st.multiselect("Ценности АДАЛ АЗАМАТ", 
-                            ["Ответственность", "Честность", "Научная добросовестность", "Патриотизм"])
+    st.header("Данные учителя")
+    fio = st.text_input("ФИО педагога")
+    
+    st.header("Параметры урока")
+    subject = st.selectbox("Выберите предмет", [
+        "Математика", "Алгебра", "Геометрия", "Физика", "Химия", "Биология", 
+        "История", "География", "Литература", "Русский язык", "Английский язык", 
+        "Информатика", "Обществознание", "Другое"
+    ])
+    
+    grade = st.selectbox("Класс", list(range(1, 12)))
 
-# Логика
-if st.button("Сгенерировать КСП"):
-    if not topic or not objectives:
-        st.warning("Заполни тему и цели!")
+# Основная часть
+topic = st.text_input("Какая тема урока?")
+
+if st.button("Сгенерировать план"):
+    if topic and fio:
+        with st.spinner('Пишу план...'):
+            try:
+                prompt = f"""
+                Составь подробный план урока.
+                Учитель: {fio}
+                Предмет: {subject}
+                Класс: {grade}
+                Тема: {topic}
+                
+                Включи в план: цели урока, структуру (этапы), основные понятия, 
+                методы проверки знаний и домашнее задание.
+                """
+                response = model.generate_content(prompt)
+                st.markdown(response.text)
+            except Exception as e:
+                st.error(f"Произошла ошибка: {e}")
     else:
-        prompt = f"""
-        Ты — методист по физике. Составь профессиональный КСП по теме: {topic} для {grade}.
-        Цели обучения: {objectives}.
-        Прививаемые ценности: {', '.join(values)}.
-        
-        СТРУКТУРА ПЛАНА:
-        1. Раздел программы (подбери по теме).
-        2. Цели урока (SMART).
-        3. Ход урока (таблица: Этап | Время | Действия педагога | Действия учащихся).
-        4. Дифференциация и Оценивание.
-        5. Рефлексия.
-        
-        Используй официально-деловой стиль ГОСО РК. Пиши четко, без лишней "воды".
-        """
-        
-        with st.spinner("Создаю план..."):
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content(prompt)
-            st.session_state['generated_plan'] = response.text
-            st.markdown(response.text)
-
-# Кнопка скачивания
-if 'generated_plan' in st.session_state:
-    st.divider()
-    docx_data = create_word_doc(st.session_state['generated_plan'])
-    st.download_button(
-        label="📥 Скачать в Word (.docx)",
-        data=docx_data,
-        file_name="Plan_uroka.docx",
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+        st.warning("Пожалуйста, заполни ФИО и тему урока.")
